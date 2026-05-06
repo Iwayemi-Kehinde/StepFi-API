@@ -1,31 +1,15 @@
-CREATE TABLE IF NOT EXISTS transactions (
+CREATE TABLE public.transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wallet_address TEXT NOT NULL,
-    tx_hash TEXT UNIQUE,
-    type TEXT NOT NULL CHECK (type IN ('loan_create', 'loan_repay', 'liquidity_deposit', 'liquidity_withdraw')),
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
-    unsigned_xdr TEXT,
-    signed_xdr TEXT,
-    result_xdr TEXT,
-    error_message TEXT,
-    loan_id BIGINT,
-    amount NUMERIC(20, 7),
-    submitted_at TIMESTAMPTZ DEFAULT NOW(),
+    user_wallet TEXT NOT NULL,
+    hash TEXT,
+    transaction_hash TEXT,
+    type TEXT,
+    status TEXT NOT NULL,
+    xdr TEXT NOT NULL,
+    result JSONB,
+    error TEXT,
+    submitted_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_transactions_wallet ON transactions(wallet_address);
-CREATE INDEX idx_transactions_status ON transactions(status);
-CREATE INDEX idx_transactions_tx_hash ON transactions(tx_hash);
-
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own transactions"
-    ON transactions FOR SELECT
-    USING (wallet_address = current_setting('app.current_wallet', true));
-
-CREATE POLICY "Service role full access on transactions"
-    ON transactions FOR ALL
-    USING (auth.role() = 'service_role');
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;

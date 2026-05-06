@@ -1,26 +1,14 @@
-CREATE TABLE IF NOT EXISTS sponsor_pools (
+CREATE TABLE public.sponsor_pools (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wallet_address TEXT NOT NULL UNIQUE,
+    wallet_address TEXT UNIQUE NOT NULL,
     org_name TEXT NOT NULL,
-    sponsor_type TEXT NOT NULL CHECK (sponsor_type IN ('company', 'individual', 'dao')),
+    sponsor_type TEXT NOT NULL,
     website TEXT,
     description TEXT,
-    total_deposited NUMERIC(20, 7) NOT NULL DEFAULT 0,
-    available NUMERIC(20, 7) NOT NULL DEFAULT 0,
-    locked NUMERIC(20, 7) NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    total_deposited NUMERIC NOT NULL DEFAULT 0,
+    available NUMERIC NOT NULL DEFAULT 0,
+    locked NUMERIC NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS idx_sponsor_pools_wallet ON sponsor_pools(wallet_address);
-CREATE INDEX IF NOT EXISTS idx_sponsor_pools_type ON sponsor_pools(sponsor_type);
-
-ALTER TABLE sponsor_pools ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Sponsors can view own pool"
-    ON sponsor_pools FOR SELECT
-    USING (wallet_address = current_setting('app.current_wallet', true));
-
-CREATE POLICY "Service role full access on sponsor_pools"
-    ON sponsor_pools FOR ALL
-    USING (auth.role() = 'service_role');
+ALTER TABLE public.sponsor_pools ENABLE ROW LEVEL SECURITY;
