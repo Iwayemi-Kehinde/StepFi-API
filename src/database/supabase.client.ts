@@ -11,11 +11,25 @@ export class SupabaseService {
     this.client = createClient(
       this.configService.get<string>('SUPABASE_URL'),
       this.configService.get<string>('SUPABASE_ANON_KEY'),
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
     );
 
     this.serviceRoleClient = createClient(
       this.configService.get<string>('SUPABASE_URL'),
       this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY'),
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
     );
   }
 
