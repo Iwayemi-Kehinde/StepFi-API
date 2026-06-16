@@ -54,20 +54,21 @@ EAS build for Expo preview → then landing page → then GitHub issues → then
 
 ## In Progress
 
-- None currently.
+- **Stellar.toml endpoint** — Added `GET /.well-known/stellar.toml` via `StellarTomlController` for Stellar ecosystem discoverability (Lobstr, StellarExpert). Returns TOML metadata with org info and 4 contract IDs. Cached in-memory with 1-hour TTL. (`stellar-toml.controller.ts`, `health.module.ts`, `stellar-toml.e2e-spec.ts`)
 
 ---
 
 ## Next Up (In Order)
 
-1. **LoanType enum** — Add `LoanType::LearnerInstallment` variant to `creditline-contract/src/types.rs`
-2. **Per-installment tracking** — Add `paid: bool` and `paid_at: u64` fields to `RepaymentInstallment` struct
-3. **repay_installment()** — New function targeting a specific installment by index (instead of just reducing remaining balance)
-4. **Learner grace period** — Make `grace_period_seconds` per-loan (not just global via parameters)
-5. **Vouching contract** — New `vouching-contract` crate: `vouch()`, `revoke_vouch()`, `get_vouches()`, `get_vouch_count()`
-6. **Reputation rules** — Update `creditline-contract` to call different reputation adjustments for `LoanType::LearnerInstallment`
-7. **Testnet deployment** — Deploy all contracts, capture IDs, add to StepFi-API `.env`
-8. **End-to-end validation** — Verify loan lifecycle on testnet via Stellar CLI
+1. **Stellar.toml endpoint** ✅ — `GET /.well-known/stellar.toml` deployed with org metadata and all 4 contract IDs; cached 1-hour TTL
+2. **LoanType enum** — Add `LoanType::LearnerInstallment` variant to `creditline-contract/src/types.rs`
+3. **Per-installment tracking** — Add `paid: bool` and `paid_at: u64` fields to `RepaymentInstallment` struct
+4. **repay_installment()** — New function targeting a specific installment by index (instead of just reducing remaining balance)
+5. **Learner grace period** — Make `grace_period_seconds` per-loan (not just global via parameters)
+6. **Vouching contract** — New `vouching-contract` crate: `vouch()`, `revoke_vouch()`, `get_vouches()`, `get_vouch_count()`
+7. **Reputation rules** — Update `creditline-contract` to call different reputation adjustments for `LoanType::LearnerInstallment`
+8. **Testnet deployment** — Deploy all contracts, capture IDs, add to StepFi-API `.env`
+9. **End-to-end validation** — Verify loan lifecycle on testnet via Stellar CLI
 
 ---
 

@@ -25,7 +25,7 @@ async function bootstrap() {
   const port = process.env.PORT || 4000;
   const apiPrefix = process.env.API_PREFIX || 'api/v1';
 
-  app.setGlobalPrefix(apiPrefix, { exclude: ['metrics'] });
+  app.setGlobalPrefix(apiPrefix, { exclude: ['metrics', '.well-known/stellar.toml'] });
 
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',

@@ -58,6 +58,7 @@ export function setupSwagger(app: INestApplication): void {
     .addTag('transactions', 'Stellar transaction submission and status tracking')
     .addTag('notifications', 'User notifications — list, read, mark as read')
     .addTag('health', 'System health checks (database, Horizon, indexer, Redis, BullMQ)')
+    .addTag('stellar', 'Stellar ecosystem metadata (stellar.toml)')
     .build();
 
   const document = SwaggerModule.createDocument(app, config, { deepScanRoutes: true });
