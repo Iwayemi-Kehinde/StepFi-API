@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import * as request from 'supertest';
+import * as jwt from 'jsonwebtoken';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../../../../src/modules/auth/auth.module';
 import { UsersModule } from '../../../../src/modules/users/users.module';
@@ -510,6 +511,166 @@ describe('AuthController (e2e)', () => {
       expect(session).toBeTruthy();
       expect(session.refresh_token_hash).toBeTruthy();
       expect(new Date(session.expires_at).getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('should return new tokens on happy path (valid refresh token)', async () => {
+      const keypair = createTestKeypair();
+      const wallet = keypair.publicKey();
+      testWallets.push(wallet);
+
+      // Complete auth flow to get refresh token
+      const nonceResponse = await request(app.getHttpServer())
+        .post('/auth/nonce')
+        .send({ wallet })
+        .expect(201);
+
+      const nonce = nonceResponse.body.nonce;
+      const signature = signMessage(keypair, nonce);
+
+      const verifyResponse = await request(app.getHttpServer())
+        .post('/auth/verify')
+        .send({ wallet, nonce, signature })
+        .expect(200);
+
+      const originalRefreshToken = verifyResponse.body.refreshToken;
+
+      // Use refresh token to get new tokens
+      const refreshResponse = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: originalRefreshToken })
+        .expect(200);
+
+      expect(refreshResponse.body).toHaveProperty('accessToken');
+      expect(refreshResponse.body).toHaveProperty('refreshToken');
+      expect(refreshResponse.body).toHaveProperty('expiresIn');
+      expect(refreshResponse.body).toHaveProperty('tokenType', 'Bearer');
+
+      // New tokens should be different from the original ones
+      expect(refreshResponse.body.accessToken).not.toBe(verifyResponse.body.accessToken);
+      expect(refreshResponse.body.refreshToken).not.toBe(originalRefreshToken);
+
+      // New access token should work for protected endpoints
+      await request(app.getHttpServer())
+        .get('/users/me')
+        .set('Authorization', `Bearer ${refreshResponse.body.accessToken}`)
+        .expect(200);
+    });
+
+    it('should return 401 with an expired refresh token', async () => {
+      const keypair = createTestKeypair();
+      const wallet = keypair.publicKey();
+      testWallets.push(wallet);
+
+      // Complete auth flow to create a user in the database
+      const nonceResponse = await request(app.getHttpServer())
+        .post('/auth/nonce')
+        .send({ wallet })
+        .expect(201);
+
+      const nonce = nonceResponse.body.nonce;
+      const signature = signMessage(keypair, nonce);
+
+      await request(app.getHttpServer())
+        .post('/auth/verify')
+        .send({ wallet, nonce, signature })
+        .expect(200);
+
+      // Create an expired refresh token signed with the same secret
+      const configService = app.get(ConfigService);
+      const refreshSecret = configService.get<string>('JWT_REFRESH_SECRET');
+      const expiredRefreshToken = jwt.sign(
+        { wallet, type: 'refresh' },
+        refreshSecret,
+        { expiresIn: '0s' },
+      );
+
+      // Wait a moment to ensure the token is expired
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: expiredRefreshToken })
+        .expect(401);
+
+      expect(response.body).toHaveProperty('message');
+    });
+
+    it('should return 401 on reuse of a refresh token (rotation detection)', async () => {
+      const keypair = createTestKeypair();
+      const wallet = keypair.publicKey();
+      testWallets.push(wallet);
+
+      // Get refresh token via verify
+      const nonceResponse = await request(app.getHttpServer())
+        .post('/auth/nonce')
+        .send({ wallet })
+        .expect(201);
+
+      const nonce = nonceResponse.body.nonce;
+      const signature = signMessage(keypair, nonce);
+
+      const verifyResponse = await request(app.getHttpServer())
+        .post('/auth/verify')
+        .send({ wallet, nonce, signature })
+        .expect(200);
+
+      const refreshToken = verifyResponse.body.refreshToken;
+
+      // First use — should succeed
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(200);
+
+      // Second use with the same token — should fail (session was deleted)
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
+    });
+
+    it('should return 401 with a malformed refresh token', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: 'invalid-token-string' })
+        .expect(401);
+    });
+
+    it('should return 401 with an empty refresh token', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: '' })
+        .expect(401);
+    });
+
+    it('should return 401 when refresh token has wrong type (access token instead of refresh token)', async () => {
+      const keypair = createTestKeypair();
+      const wallet = keypair.publicKey();
+      testWallets.push(wallet);
+
+      // Get an access token via verify
+      const nonceResponse = await request(app.getHttpServer())
+        .post('/auth/nonce')
+        .send({ wallet })
+        .expect(201);
+
+      const nonce = nonceResponse.body.nonce;
+      const signature = signMessage(keypair, nonce);
+
+      const verifyResponse = await request(app.getHttpServer())
+        .post('/auth/verify')
+        .send({ wallet, nonce, signature })
+        .expect(200);
+
+      const accessToken = verifyResponse.body.accessToken;
+
+      // Try to use access token as refresh token
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: accessToken })
+        .expect(401);
     });
   });
 });
