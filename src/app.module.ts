@@ -1,8 +1,9 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
+import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { LoansModule } from './modules/loans/loans.module';
@@ -15,7 +16,7 @@ import { LiquidityModule } from './modules/liquidity/liquidity.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { LearnersModule } from './modules/learners/learners.module';
-import { BlockchainIndexerModule } from './jobs/blockchain-indexer/blockchain-indexer.module';
+import { IndexerModule } from './indexer/indexer.module';
 import { LoanPaymentReminderModule } from './jobs/loan-payment-reminder/loan-payment-reminder.module';
 import { TransactionStatusCheckerModule } from './jobs/transaction-status-checker/transaction-status-checker.module';
 import { NonceCleanupModule } from './jobs/nonce-cleanup/nonce-cleanup.module';
@@ -23,11 +24,13 @@ import { StellarModule } from './stellar/stellar.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { CreditScoringModule } from './modules/credit-scoring/credit-scoring.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { CorrelationIdMiddleware } from './common/logger/correlation-id.middleware';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    SentryModule.forRoot(),
     LoggerModule,
     ThrottlerModule.forRoot([
       {
@@ -57,11 +60,12 @@ import { CorrelationIdMiddleware } from './common/logger/correlation-id.middlewa
     NotificationsModule,
     TransactionsModule,
     LearnersModule,
-    BlockchainIndexerModule,
+    IndexerModule,
     LoanPaymentReminderModule,
     TransactionStatusCheckerModule,
     NonceCleanupModule,
     CreditScoringModule,
+    AdminModule,
     StellarModule,
   ],
   controllers: [],
@@ -69,6 +73,10 @@ import { CorrelationIdMiddleware } from './common/logger/correlation-id.middlewa
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
     },
   ],
 })
