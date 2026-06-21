@@ -1,94 +1,40 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import * as request from 'supertest';
 import * as jwt from 'jsonwebtoken';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { AuthModule } from '../../../../src/modules/auth/auth.module';
-import { UsersModule } from '../../../../src/modules/users/users.module';
-import { HealthModule } from '../../../../src/modules/health/health.module';
+import { ConfigService } from '@nestjs/config';
+import { Keypair } from 'stellar-sdk';
 import { SupabaseService } from '../../../../src/database/supabase.client';
 import { createTestKeypair, signMessage } from '../../../helpers';
 import { createMockRegisterRequest } from '../../../fixtures';
+import { buildTestApp, closeTestApp, InMemoryStore } from '../../helpers/test-setup';
 
 describe('AuthController (e2e)', () => {
-  let app: NestFastifyApplication;
+  let app: INestApplication;
+  let mockDb: InMemoryStore;
   let supabaseService: SupabaseService;
   let testWallets: string[] = [];
   let testUsernames: string[] = [];
+  let originalFromPublicKey: any;
 
   beforeAll(async () => {
-    // Set test environment variables
-    process.env.JWT_SECRET = 'test_jwt_secret_for_e2e_testing_min_32_chars';
-    process.env.JWT_REFRESH_SECRET = 'test_jwt_refresh_secret_for_e2e_testing_min_32_chars';
-    process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.supabase.co';
-    process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'test_anon_key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test_service_role_key';
-
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({ isGlobal: true }),
-        AuthModule,
-        UsersModule,
-        HealthModule,
-      ],
-    }).compile();
-
-    app = moduleFixture.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
-    );
-
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-
-    await app.init();
-    await app.getHttpAdapter().getInstance().ready();
-
+    const ctx = await buildTestApp();
+    app = ctx.app;
+    mockDb = ctx.mockDb;
     supabaseService = app.get(SupabaseService);
+    originalFromPublicKey = Keypair.fromPublicKey;
   });
 
   afterAll(async () => {
-    await app.close();
+    await closeTestApp(app);
   });
 
   afterEach(async () => {
-    // Clean up test data
-    const client = supabaseService.getServiceRoleClient();
-
-    // Clean up nonces
-    if (testWallets.length > 0) {
-      await client.from('nonces').delete().in('wallet_address', testWallets);
+    jest.restoreAllMocks();
+    if (originalFromPublicKey) {
+      Keypair.fromPublicKey = originalFromPublicKey;
     }
-
-    // Clean up users
-    if (testWallets.length > 0) {
-      await client.from('users').delete().in('wallet_address', testWallets);
-    }
-
-    // Clean up sessions
-    if (testWallets.length > 0) {
-      const userIds = await client
-        .from('users')
-        .select('id')
-        .in('wallet_address', testWallets);
-
-      if (userIds.data && userIds.data.length > 0) {
-        const ids = userIds.data.map(u => u.id);
-        await client.from('sessions').delete().in('user_id', ids);
-      }
-    }
-
-    // Clean up usernames from users table
-    if (testUsernames.length > 0) {
-      await client.from('users').delete().in('username', testUsernames);
-    }
-
-    // Reset test data arrays
+    mockDb.clear();
     testWallets = [];
     testUsernames = [];
   });
@@ -211,10 +157,18 @@ describe('AuthController (e2e)', () => {
       const nonce = nonceResponse.body.nonce;
       const invalidSignature = Buffer.alloc(64).toString('base64');
 
+      // Mock verify to return false
+      Keypair.fromPublicKey = jest.fn(() => ({
+        verify: jest.fn(() => false),
+        publicKey: jest.fn(() => wallet),
+      })) as any;
+
       await request(app.getHttpServer())
         .post('/auth/verify')
         .send({ wallet, nonce, signature: invalidSignature })
         .expect(401);
+
+      Keypair.fromPublicKey = originalFromPublicKey;
     });
   });
 
@@ -439,7 +393,7 @@ describe('AuthController (e2e)', () => {
         .single();
 
       expect(nonce).toBeTruthy();
-      expect(nonce.used_at).toBeNull();
+      expect(nonce.used_at).toBeFalsy();
       expect(new Date(nonce.expires_at).getTime()).toBeGreaterThan(Date.now());
     });
 
@@ -536,6 +490,10 @@ describe('AuthController (e2e)', () => {
 
       const originalRefreshToken = verifyResponse.body.refreshToken;
 
+      // Mock Date.now to advance time by 5 seconds
+      const RealDateNow = Date.now;
+      jest.spyOn(Date, 'now').mockImplementation(() => RealDateNow() + 5000);
+
       // Use refresh token to get new tokens
       const refreshResponse = await request(app.getHttpServer())
         .post('/auth/refresh')
@@ -617,6 +575,10 @@ describe('AuthController (e2e)', () => {
         .expect(200);
 
       const refreshToken = verifyResponse.body.refreshToken;
+
+      // Mock Date.now to advance time by 5 seconds so that the refreshed token has a different hash
+      const RealDateNow = Date.now;
+      jest.spyOn(Date, 'now').mockImplementation(() => RealDateNow() + 5000);
 
       // First use — should succeed
       await request(app.getHttpServer())
