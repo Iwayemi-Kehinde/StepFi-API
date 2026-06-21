@@ -172,11 +172,11 @@ export class LoansService {
     };
   }
 
-  async repayLoan(
+  async buildRepaymentXdr(
     wallet: string,
     loanId: string,
-    dto: LoanPaymentRequestDto,
-  ): Promise<LoanPaymentResponseDto> {
+    amount: number,
+  ): Promise<string> {
     const client = this.supabaseService.getServiceRoleClient();
     const { data: loan, error } = await client
       .from('loans')
@@ -206,18 +206,42 @@ export class LoansService {
     }
 
     const remainingBalance = Number(loan.remaining_balance);
-    if (dto.amount > remainingBalance) {
+    if (amount > remainingBalance) {
       throw new BadRequestException({
         code: 'LOAN_PAYMENT_EXCEEDS_BALANCE',
-        message: `Payment amount $${dto.amount} exceeds the remaining balance of $${remainingBalance}.`,
+        message: `Payment amount $${amount} exceeds the remaining balance of $${remainingBalance}.`,
       });
     }
 
-    const unsignedXdr = await this.creditLineContractClient.buildRepayLoanTx(
+    return this.creditLineContractClient.buildRepayLoanTx(
       wallet,
       loan.loan_id,
-      dto.amount,
+      amount,
     );
+  }
+
+  async repayLoan(
+    wallet: string,
+    loanId: string,
+    dto: LoanPaymentRequestDto,
+  ): Promise<LoanPaymentResponseDto> {
+    const client = this.supabaseService.getServiceRoleClient();
+    const { data: loan, error } = await client
+      .from('loans')
+      .select('remaining_balance')
+      .eq('id', loanId)
+      .single();
+
+    if (error || !loan) {
+      throw new NotFoundException({
+        code: 'LOAN_NOT_FOUND',
+        message: 'Loan not found. Please provide a valid loan ID.',
+      });
+    }
+
+    const remainingBalance = Number(loan.remaining_balance);
+
+    const unsignedXdr = await this.buildRepaymentXdr(wallet, loanId, dto.amount);
 
     const newBalance = Math.round((remainingBalance - dto.amount) * 10_000_000) / 10_000_000;
     const willComplete = newBalance === 0;

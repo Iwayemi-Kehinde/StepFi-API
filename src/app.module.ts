@@ -11,6 +11,7 @@ import { ReputationModule } from './modules/reputation/reputation.module';
 import { UsersModule } from './modules/users/users.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
 import { VouchingModule } from './modules/vouching/vouching.module';
+import { BlockchainModule } from './modules/blockchain/blockchain.module';
 import { SponsorsModule } from './modules/sponsors/sponsors.module';
 import { LiquidityModule } from './modules/liquidity/liquidity.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -55,6 +56,7 @@ import { CorrelationIdMiddleware } from './common/logger/correlation-id.middlewa
     UsersModule,
     VendorsModule,
     VouchingModule,
+    BlockchainModule,
     SponsorsModule,
     LiquidityModule,
     NotificationsModule,

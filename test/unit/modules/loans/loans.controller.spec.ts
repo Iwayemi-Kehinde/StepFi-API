@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LoansController } from '../../../../src/modules/loans/loans.controller';
 import { LoansService } from '../../../../src/modules/loans/loans.service';
+import { BlockchainService } from '../../../../src/modules/blockchain/blockchain.service';
 import { CreateLoanResponseDto } from '../../../../src/modules/loans/dto/create-loan-response.dto';
 import { LoanListStatusFilter } from '../../../../src/modules/loans/dto/loan-list-query.dto';
 
@@ -45,7 +46,10 @@ describe('LoansController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LoansController],
-      providers: [{ provide: LoansService, useValue: mockLoansService }],
+      providers: [
+        { provide: LoansService, useValue: mockLoansService },
+        { provide: BlockchainService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<LoansController>(LoansController);

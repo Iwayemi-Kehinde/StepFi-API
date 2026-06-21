@@ -18,6 +18,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { BlockchainService } from '../blockchain/blockchain.service';
 import { LoansService } from './loans.service';
 import { LoanQuoteRequestDto } from './dto/loan-quote-request.dto';
 import { LoanQuoteResponseDto } from './dto/loan-quote-response.dto';
@@ -35,7 +36,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiTags('loans')
 @Controller('loans')
 export class LoansController {
-  constructor(private readonly loansService: LoansService) {}
+  constructor(
+    private readonly loansService: LoansService,
+    private readonly blockchainService: BlockchainService,
+  ) {}
 
   @Post('quote')
   @HttpCode(HttpStatus.OK)
@@ -201,6 +205,49 @@ export class LoansController {
   ) {
     const data = await this.loansService.repayLoan(user.wallet, loanId, dto);
     return { success: true, data, message: 'Repayment transaction constructed successfully' };
+  }
+
+  @Post(':loanId/repay')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'loanId',
+    description: 'UUID of the loan being repaid',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  @ApiOperation({
+    summary: 'Submit signed repayment transaction',
+    description:
+      'Accepts a signed Soroban repay_installment() XDR transaction, submits it to the Stellar network, and waits for ledger confirmation. Returns the transaction hash on success.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Repayment transaction submitted and confirmed',
+    schema: {
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          properties: {
+            transactionHash: {
+              type: 'string',
+              example: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+            },
+          },
+        },
+        message: { type: 'string', example: 'Repayment submitted and confirmed successfully' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid XDR or loan state' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - missing or invalid JWT' })
+  @ApiResponse({ status: 503, description: 'Stellar network unavailable or confirmation timeout' })
+  async submitRepayment(
+    @Param('loanId', ParseUUIDPipe) loanId: string,
+    @Body('xdr') signedXdr: string,
+  ) {
+    const data = await this.blockchainService.submitRepayment(signedXdr);
+    return { success: true, data, message: 'Repayment submitted and confirmed successfully' };
   }
 
   @Post(':loanId/assess')
